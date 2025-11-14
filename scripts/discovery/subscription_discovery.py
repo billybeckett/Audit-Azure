@@ -67,10 +67,10 @@ def discover_subscriptions():
         except Exception as e:
             sub_info["registered_providers"] = []
 
-        # Get subscription locations
+        # Get subscription locations (this is global, not per-subscription)
         try:
             locations = run_az_command(
-                f"az account list-locations --subscription {sub['id']} --output json"
+                "az account list-locations --output json"
             )
             sub_info["available_locations"] = [
                 {
