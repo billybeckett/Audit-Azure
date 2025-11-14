@@ -3,8 +3,19 @@ Markdown Report Generator for Azure Resources
 Generates comprehensive, well-formatted markdown documentation
 """
 
+import sys
+import os
 from pathlib import Path
 from datetime import datetime
+
+# Add utils to path for diagram generator
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+
+try:
+    from diagram_generator import NetworkDiagramGenerator
+    DIAGRAMS_AVAILABLE = True
+except ImportError:
+    DIAGRAMS_AVAILABLE = False
 
 
 class MarkdownGenerator:
@@ -213,12 +224,31 @@ This document provides detailed information about all Azure subscriptions.
 This document details all networking resources including VNets, Subnets, NSGs, Load Balancers, and more.
 
 """
+        # Generate network diagrams if available
+        if DIAGRAMS_AVAILABLE:
+            try:
+                diagram_gen = NetworkDiagramGenerator(audit_data, output_dir=self.output_dir / "diagrams")
+                diagram_gen.generate_all_diagrams()
+            except Exception as e:
+                content += f"\n*Note: Network diagrams could not be generated: {e}*\n\n"
+
         networking_data = audit_data.get("networking", {})
 
         for sub_id, net_data in networking_data.items():
             if net_data.get("error"):
                 content += f"\n**Error discovering networking resources:** {net_data.get('error')}\n"
                 continue
+
+            # Add network topology diagram for this subscription
+            if DIAGRAMS_AVAILABLE:
+                try:
+                    diagram_gen = NetworkDiagramGenerator(audit_data)
+                    mermaid_content = diagram_gen.get_mermaid_for_markdown(sub_id)
+                    if mermaid_content:
+                        content += "\n## Network Topology Diagram\n\n"
+                        content += mermaid_content + "\n\n"
+                except Exception as e:
+                    pass  # Silently skip if diagram generation fails
 
             summary = net_data.get("summary", {})
             content += f"""
