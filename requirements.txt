@@ -1,0 +1,26 @@
+# Azure Infrastructure Audit Tool - Python Dependencies
+#
+# This file contains Python package dependencies for the Azure audit tool.
+# Most of the discovery is done using Azure CLI commands, so minimal Python
+# packages are required.
+
+# Core dependencies
+# None required - the tool uses subprocess to call Azure CLI
+
+# Optional dependencies for enhanced functionality
+# Uncomment if you want to use these features:
+
+# For more advanced JSON handling (optional)
+# jsonschema>=4.0.0
+
+# For colored terminal output (optional)
+# colorama>=0.4.0
+
+# For progress bars (optional)
+# tqdm>=4.60.0
+
+# For better date/time handling (optional)
+# python-dateutil>=2.8.0
+
+# Note: Azure CLI must be installed separately
+# Installation: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
