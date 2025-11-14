@@ -39,6 +39,12 @@ def discover_networking(subscription_id):
         "summary": {}
     }
 
+    # Get all resource groups for this subscription (needed for some commands)
+    resource_groups = run_az_command(
+        f"az group list --subscription {subscription_id} --output json"
+    )
+    rg_names = [rg.get("name") for rg in resource_groups if rg.get("name")]
+
     # Virtual Networks
     vnets = run_az_command(
         f"az network vnet list --subscription {subscription_id} --output json"
@@ -237,25 +243,26 @@ def discover_networking(subscription_id):
         }
         networking_data["vpn_gateways"].append(vpn_info)
 
-    # Virtual Network Gateways
-    vnet_gws = run_az_command(
-        f"az network vnet-gateway list --subscription {subscription_id} --output json"
-    )
-    for vgw in vnet_gws:
-        vgw_info = {
-            "name": vgw.get("name"),
-            "id": vgw.get("id"),
-            "location": vgw.get("location"),
-            "resource_group": vgw.get("resourceGroup"),
-            "gateway_type": vgw.get("gatewayType"),
-            "vpn_type": vgw.get("vpnType"),
-            "sku": vgw.get("sku", {}).get("name"),
-            "active_active": vgw.get("activeActive"),
-            "enable_bgp": vgw.get("enableBgp"),
-            "provisioning_state": vgw.get("provisioningState"),
-            "tags": vgw.get("tags", {})
-        }
-        networking_data["vnet_gateways"].append(vgw_info)
+    # Virtual Network Gateways (requires --resource-group)
+    for rg_name in rg_names:
+        vnet_gws = run_az_command(
+            f"az network vnet-gateway list --resource-group {rg_name} --subscription {subscription_id} --output json"
+        )
+        for vgw in vnet_gws:
+            vgw_info = {
+                "name": vgw.get("name"),
+                "id": vgw.get("id"),
+                "location": vgw.get("location"),
+                "resource_group": vgw.get("resourceGroup"),
+                "gateway_type": vgw.get("gatewayType"),
+                "vpn_type": vgw.get("vpnType"),
+                "sku": vgw.get("sku", {}).get("name"),
+                "active_active": vgw.get("activeActive"),
+                "enable_bgp": vgw.get("enableBgp"),
+                "provisioning_state": vgw.get("provisioningState"),
+                "tags": vgw.get("tags", {})
+            }
+            networking_data["vnet_gateways"].append(vgw_info)
 
     # Azure Firewalls
     firewalls = run_az_command(
