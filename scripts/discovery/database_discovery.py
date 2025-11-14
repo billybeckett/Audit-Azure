@@ -3,25 +3,13 @@ Azure Database Discovery Module
 Discovers SQL Databases, MySQL, PostgreSQL, CosmosDB, Redis Cache, etc.
 """
 
-import subprocess
-import json
+import sys
+import os
 
+# Add utils to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 
-def run_az_command(command):
-    """Execute Azure CLI command and return JSON output"""
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        if result.returncode != 0:
-            return []
-        return json.loads(result.stdout) if result.stdout else []
-    except:
-        return []
+from logger import run_az_command
 
 
 def discover_databases(subscription_id):

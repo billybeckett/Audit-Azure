@@ -64,6 +64,7 @@ USAGE:
 
 OPTIONS:
     --login         Perform Azure CLI login before running audit
+    -v, --verbose   Enable verbose mode (shows all Azure CLI commands)
     --help          Display this help message
 
 REQUIREMENTS:
@@ -77,6 +78,12 @@ EXAMPLES:
 
     # Login and then run audit
     ./audit-azure.sh --login
+
+    # Run audit with verbose output
+    ./audit-azure.sh --verbose
+
+    # Login and run with verbose mode
+    ./audit-azure.sh --login --verbose
 
 OUTPUT:
     Documentation will be generated in the 'docs/' directory:
@@ -145,11 +152,12 @@ perform_login() {
 }
 
 run_audit() {
+    local verbose_flag="$1"
     print_info "Starting Azure infrastructure discovery..."
     echo ""
 
     if [ -f "$PYTHON_SCRIPT" ]; then
-        python3 "$PYTHON_SCRIPT"
+        python3 "$PYTHON_SCRIPT" $verbose_flag
         if [ $? -eq 0 ]; then
             echo ""
             print_success "Audit completed successfully!"
@@ -173,12 +181,17 @@ run_audit() {
 # Main execution
 main() {
     local DO_LOGIN=false
+    local VERBOSE_FLAG=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --login)
                 DO_LOGIN=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE_FLAG="--verbose"
                 shift
                 ;;
             --help|-h)
@@ -208,7 +221,7 @@ main() {
     check_azure_auth
 
     # Run the audit
-    run_audit
+    run_audit "$VERBOSE_FLAG"
 }
 
 # Run main function

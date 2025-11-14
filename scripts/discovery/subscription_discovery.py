@@ -3,29 +3,13 @@ Azure Subscription Discovery Module
 Discovers all subscriptions and basic account information
 """
 
-import subprocess
-import json
+import sys
+import os
 
+# Add utils to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 
-def run_az_command(command):
-    """Execute Azure CLI command and return JSON output"""
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        if result.returncode != 0:
-            raise Exception(f"Command failed: {result.stderr}")
-        return json.loads(result.stdout) if result.stdout else []
-    except json.JSONDecodeError as e:
-        raise Exception(f"Failed to parse JSON: {e}")
-    except subprocess.TimeoutExpired:
-        raise Exception("Command timed out")
-    except Exception as e:
-        raise Exception(f"Command execution failed: {e}")
+from logger import run_az_command
 
 
 def discover_subscriptions():

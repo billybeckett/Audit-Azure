@@ -7,11 +7,13 @@ This script discovers all resources in an Azure account and generates comprehens
 import json
 import os
 import sys
+import argparse
 from datetime import datetime
 from pathlib import Path
 
 # Add the discovery directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'discovery'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
 from discovery.subscription_discovery import discover_subscriptions
 from discovery.networking_discovery import discover_networking
@@ -21,6 +23,7 @@ from discovery.database_discovery import discover_databases
 from discovery.dns_discovery import discover_dns
 from discovery.security_discovery import discover_security
 from reports.markdown_generator import generate_all_reports
+from utils.logger import init_logger, get_logger
 
 
 class AzureAuditor:
@@ -54,10 +57,21 @@ class AzureAuditor:
 
     def run_discovery(self):
         """Run complete Azure discovery process"""
+        logger = get_logger()
+        logger.log_section("Azure Resource Discovery and Audit")
+
         print("=" * 80)
         print("Azure Resource Discovery and Audit")
         print("=" * 80)
         print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        # Print log file information
+        log_file = logger.log_file
+        print()
+        print("📝 LOGGING:")
+        print(f"   Log file: {log_file}")
+        print(f"   To watch in real-time, open a new terminal and run:")
+        print(f"   \033[1;36mtail -f {log_file}\033[0m")
         print()
 
         # Discover subscriptions
@@ -173,6 +187,17 @@ class AzureAuditor:
         print("\n" + "=" * 80)
         print(f"✅ Azure Audit Complete!")
         print(f"📁 Documentation available in: {self.output_dir.absolute()}")
+
+        # Print logging summary
+        logger = get_logger()
+        stats = logger.get_stats()
+        print()
+        print("📊 Logging Summary:")
+        print(f"   Commands executed: {stats['commands_executed']}")
+        print(f"   Total time: {stats['total_time']:.2f}s")
+        print(f"   Log file: {stats['log_file']}")
+        logger.print_summary()
+
         print("=" * 80)
 
         return True
@@ -180,7 +205,33 @@ class AzureAuditor:
 
 def main():
     """Main entry point"""
-    auditor = AzureAuditor(output_dir="docs")
+    parser = argparse.ArgumentParser(
+        description='Azure Infrastructure Discovery and Audit Tool',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose output (shows all Azure CLI commands and responses)'
+    )
+    parser.add_argument(
+        '--log-dir',
+        default='logs',
+        help='Directory for log files (default: logs/)'
+    )
+    parser.add_argument(
+        '--output-dir',
+        default='docs',
+        help='Directory for output documentation (default: docs/)'
+    )
+
+    args = parser.parse_args()
+
+    # Initialize logger
+    init_logger(log_dir=args.log_dir, verbose=args.verbose)
+
+    # Run audit
+    auditor = AzureAuditor(output_dir=args.output_dir)
     success = auditor.run_discovery()
     sys.exit(0 if success else 1)
 
