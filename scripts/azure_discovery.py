@@ -15,6 +15,9 @@ from pathlib import Path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'discovery'))
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
+# Import logger first to ensure it's initialized
+from logger import init_logger, get_logger
+
 from discovery.subscription_discovery import discover_subscriptions
 from discovery.networking_discovery import discover_networking
 from discovery.compute_discovery import discover_compute
@@ -23,7 +26,6 @@ from discovery.database_discovery import discover_databases
 from discovery.dns_discovery import discover_dns
 from discovery.security_discovery import discover_security
 from reports.markdown_generator import generate_all_reports
-from utils.logger import init_logger, get_logger
 
 
 class AzureAuditor:
