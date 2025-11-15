@@ -57,6 +57,11 @@ This report provides a comprehensive overview of all Azure resources discovered 
 
         content += f"""
 
+## 📋 Quick Views
+
+### 🏗️ [Infrastructure Hierarchy](resources/hierarchy.md)
+**Start Here!** Complete organizational hierarchy showing Account → Subscriptions → Resource Groups → Resources in a tree structure.
+
 ## Resource Categories
 
 This audit covers the following resource categories:
@@ -81,6 +86,7 @@ Key Vaults, Managed Identities, Role Assignments, Security Center alerts, and mo
 
 ## Detailed Reports
 
+- [Infrastructure Hierarchy](resources/hierarchy.md) - **Complete organizational structure**
 - [Subscription Details](resources/subscriptions.md) - Detailed subscription information
 - [Resource Groups](resources/resource-groups.md) - All resource groups and their contents
 - [Cost Analysis](resources/cost-analysis.md) - Resource cost overview (requires additional data)
@@ -104,6 +110,7 @@ Key Vaults, Managed Identities, Role Assignments, Security Center alerts, and mo
 ## Navigation
 
 - [Back to Top](#azure-infrastructure-audit-report)
+- [**Infrastructure Hierarchy**](resources/hierarchy.md) ← Start here for complete structure!
 - [Networking Details](resources/networking.md)
 - [Compute Details](resources/compute.md)
 - [Storage Details](resources/storage.md)
@@ -804,6 +811,254 @@ This document details all DNS resources including DNS Zones and Private DNS Zone
             f.write(content)
         print(f"   ✓ DNS report: {filepath}")
 
+    def generate_hierarchy_report(self, audit_data):
+        """Generate hierarchical view of entire Azure infrastructure"""
+        content = """# Azure Infrastructure Hierarchy
+
+## Overview
+
+This document shows the complete hierarchy of your Azure infrastructure, organized by Account → Subscriptions → Resource Groups → Resources.
+
+"""
+        # Get subscriptions
+        subscriptions = audit_data.get("subscriptions", [])
+
+        if not subscriptions:
+            content += "*No subscriptions found or authentication failed.*\n"
+        else:
+            # Build resource index by subscription and resource group
+            for sub in subscriptions:
+                sub_id = sub.get("id", "unknown")
+                sub_name = sub.get("name", "Unknown")
+
+                content += f"\n## 📦 Subscription: {sub_name}\n\n"
+                content += f"**Subscription ID:** `{sub_id}`\n\n"
+                content += f"**State:** {sub.get('state', 'Unknown')} | "
+                content += f"**Tenant ID:** `{sub.get('tenant_id', 'N/A')}`\n\n"
+
+                # Get resource groups
+                resource_groups = sub.get('resource_groups', [])
+
+                if not resource_groups:
+                    content += "*No resource groups found in this subscription.*\n\n"
+                    continue
+
+                content += f"**Resource Groups:** {len(resource_groups)}\n\n"
+
+                # Create resource index by resource group
+                rg_resources = {}
+                for rg in resource_groups:
+                    rg_name = rg.get('name', 'Unknown')
+                    rg_resources[rg_name] = {
+                        'location': rg.get('location', 'Unknown'),
+                        'networking': {'vnets': [], 'subnets': [], 'nsgs': [], 'public_ips': [], 'load_balancers': [], 'firewalls': []},
+                        'compute': {'vms': [], 'vmss': [], 'app_services': [], 'functions': [], 'aks': []},
+                        'storage': {'storage_accounts': [], 'disks': []},
+                        'databases': {'sql_servers': [], 'mysql': [], 'postgresql': [], 'cosmosdb': [], 'redis': []},
+                        'dns': {'dns_zones': [], 'private_dns_zones': []},
+                        'security': {'key_vaults': [], 'managed_identities': []}
+                    }
+
+                # Populate resources by resource group
+                # Networking
+                networking_data = audit_data.get('networking', {}).get(sub_id, {})
+                for vnet in networking_data.get('vnets', []):
+                    rg = vnet.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['networking']['vnets'].append(vnet.get('name'))
+                for nsg in networking_data.get('nsgs', []):
+                    rg = nsg.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['networking']['nsgs'].append(nsg.get('name'))
+                for pip in networking_data.get('public_ips', []):
+                    rg = pip.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['networking']['public_ips'].append(pip.get('name'))
+                for lb in networking_data.get('load_balancers', []):
+                    rg = lb.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['networking']['load_balancers'].append(lb.get('name'))
+                for fw in networking_data.get('firewalls', []):
+                    rg = fw.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['networking']['firewalls'].append(fw.get('name'))
+
+                # Compute
+                compute_data = audit_data.get('compute', {}).get(sub_id, {})
+                for vm in compute_data.get('virtual_machines', []):
+                    rg = vm.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['compute']['vms'].append(vm.get('name'))
+                for vmss in compute_data.get('vm_scale_sets', []):
+                    rg = vmss.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['compute']['vmss'].append(vmss.get('name'))
+                for app in compute_data.get('app_services', []):
+                    rg = app.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['compute']['app_services'].append(app.get('name'))
+                for func in compute_data.get('function_apps', []):
+                    rg = func.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['compute']['functions'].append(func.get('name'))
+                for aks in compute_data.get('kubernetes_services', []):
+                    rg = aks.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['compute']['aks'].append(aks.get('name'))
+
+                # Storage
+                storage_data = audit_data.get('storage', {}).get(sub_id, {})
+                for sa in storage_data.get('storage_accounts', []):
+                    rg = sa.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['storage']['storage_accounts'].append(sa.get('name'))
+                for disk in storage_data.get('managed_disks', []):
+                    rg = disk.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['storage']['disks'].append(disk.get('name'))
+
+                # Databases
+                db_data = audit_data.get('databases', {}).get(sub_id, {})
+                for sql in db_data.get('sql_servers', []):
+                    rg = sql.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['databases']['sql_servers'].append(sql.get('name'))
+                for mysql in db_data.get('mysql_servers', []):
+                    rg = mysql.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['databases']['mysql'].append(mysql.get('name'))
+                for pg in db_data.get('postgresql_servers', []):
+                    rg = pg.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['databases']['postgresql'].append(pg.get('name'))
+                for cosmos in db_data.get('cosmosdb_accounts', []):
+                    rg = cosmos.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['databases']['cosmosdb'].append(cosmos.get('name'))
+                for redis in db_data.get('redis_caches', []):
+                    rg = redis.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['databases']['redis'].append(redis.get('name'))
+
+                # DNS
+                dns_data = audit_data.get('dns', {}).get(sub_id, {})
+                for zone in dns_data.get('dns_zones', []):
+                    rg = zone.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['dns']['dns_zones'].append(zone.get('name'))
+                for pzone in dns_data.get('private_dns_zones', []):
+                    rg = pzone.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['dns']['private_dns_zones'].append(pzone.get('name'))
+
+                # Security
+                sec_data = audit_data.get('security', {}).get(sub_id, {})
+                for kv in sec_data.get('key_vaults', []):
+                    rg = kv.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['security']['key_vaults'].append(kv.get('name'))
+                for mi in sec_data.get('managed_identities', []):
+                    rg = mi.get('resource_group')
+                    if rg in rg_resources:
+                        rg_resources[rg]['security']['managed_identities'].append(mi.get('name'))
+
+                # Generate hierarchy tree for each resource group
+                for rg_name, rg_data in rg_resources.items():
+                    content += f"### 📁 Resource Group: `{rg_name}` ({rg_data['location']})\n\n"
+
+                    # Count total resources
+                    total_resources = 0
+                    for category in rg_data.values():
+                        if isinstance(category, dict):
+                            for resources in category.values():
+                                if isinstance(resources, list):
+                                    total_resources += len(resources)
+
+                    if total_resources == 0:
+                        content += "*No resources found in this resource group.*\n\n"
+                        continue
+
+                    # Networking
+                    if any(len(v) > 0 for v in rg_data['networking'].values()):
+                        content += "#### 🌐 Networking\n\n"
+                        if rg_data['networking']['vnets']:
+                            content += f"- **Virtual Networks ({len(rg_data['networking']['vnets'])}):** {', '.join(rg_data['networking']['vnets'])}\n"
+                        if rg_data['networking']['nsgs']:
+                            content += f"- **Network Security Groups ({len(rg_data['networking']['nsgs'])}):** {', '.join(rg_data['networking']['nsgs'])}\n"
+                        if rg_data['networking']['public_ips']:
+                            content += f"- **Public IPs ({len(rg_data['networking']['public_ips'])}):** {', '.join(rg_data['networking']['public_ips'])}\n"
+                        if rg_data['networking']['load_balancers']:
+                            content += f"- **Load Balancers ({len(rg_data['networking']['load_balancers'])}):** {', '.join(rg_data['networking']['load_balancers'])}\n"
+                        if rg_data['networking']['firewalls']:
+                            content += f"- **Firewalls ({len(rg_data['networking']['firewalls'])}):** {', '.join(rg_data['networking']['firewalls'])}\n"
+                        content += "\n"
+
+                    # Compute
+                    if any(len(v) > 0 for v in rg_data['compute'].values()):
+                        content += "#### 💻 Compute\n\n"
+                        if rg_data['compute']['vms']:
+                            content += f"- **Virtual Machines ({len(rg_data['compute']['vms'])}):** {', '.join(rg_data['compute']['vms'])}\n"
+                        if rg_data['compute']['vmss']:
+                            content += f"- **VM Scale Sets ({len(rg_data['compute']['vmss'])}):** {', '.join(rg_data['compute']['vmss'])}\n"
+                        if rg_data['compute']['app_services']:
+                            content += f"- **App Services ({len(rg_data['compute']['app_services'])}):** {', '.join(rg_data['compute']['app_services'])}\n"
+                        if rg_data['compute']['functions']:
+                            content += f"- **Function Apps ({len(rg_data['compute']['functions'])}):** {', '.join(rg_data['compute']['functions'])}\n"
+                        if rg_data['compute']['aks']:
+                            content += f"- **AKS Clusters ({len(rg_data['compute']['aks'])}):** {', '.join(rg_data['compute']['aks'])}\n"
+                        content += "\n"
+
+                    # Storage
+                    if any(len(v) > 0 for v in rg_data['storage'].values()):
+                        content += "#### 💾 Storage\n\n"
+                        if rg_data['storage']['storage_accounts']:
+                            content += f"- **Storage Accounts ({len(rg_data['storage']['storage_accounts'])}):** {', '.join(rg_data['storage']['storage_accounts'])}\n"
+                        if rg_data['storage']['disks']:
+                            content += f"- **Managed Disks ({len(rg_data['storage']['disks'])}):** {', '.join(rg_data['storage']['disks'])}\n"
+                        content += "\n"
+
+                    # Databases
+                    if any(len(v) > 0 for v in rg_data['databases'].values()):
+                        content += "#### 🗄️ Databases\n\n"
+                        if rg_data['databases']['sql_servers']:
+                            content += f"- **SQL Servers ({len(rg_data['databases']['sql_servers'])}):** {', '.join(rg_data['databases']['sql_servers'])}\n"
+                        if rg_data['databases']['mysql']:
+                            content += f"- **MySQL Servers ({len(rg_data['databases']['mysql'])}):** {', '.join(rg_data['databases']['mysql'])}\n"
+                        if rg_data['databases']['postgresql']:
+                            content += f"- **PostgreSQL Servers ({len(rg_data['databases']['postgresql'])}):** {', '.join(rg_data['databases']['postgresql'])}\n"
+                        if rg_data['databases']['cosmosdb']:
+                            content += f"- **CosmosDB Accounts ({len(rg_data['databases']['cosmosdb'])}):** {', '.join(rg_data['databases']['cosmosdb'])}\n"
+                        if rg_data['databases']['redis']:
+                            content += f"- **Redis Caches ({len(rg_data['databases']['redis'])}):** {', '.join(rg_data['databases']['redis'])}\n"
+                        content += "\n"
+
+                    # DNS
+                    if any(len(v) > 0 for v in rg_data['dns'].values()):
+                        content += "#### 🔍 DNS\n\n"
+                        if rg_data['dns']['dns_zones']:
+                            content += f"- **DNS Zones ({len(rg_data['dns']['dns_zones'])}):** {', '.join(rg_data['dns']['dns_zones'])}\n"
+                        if rg_data['dns']['private_dns_zones']:
+                            content += f"- **Private DNS Zones ({len(rg_data['dns']['private_dns_zones'])}):** {', '.join(rg_data['dns']['private_dns_zones'])}\n"
+                        content += "\n"
+
+                    # Security
+                    if any(len(v) > 0 for v in rg_data['security'].values()):
+                        content += "#### 🔒 Security\n\n"
+                        if rg_data['security']['key_vaults']:
+                            content += f"- **Key Vaults ({len(rg_data['security']['key_vaults'])}):** {', '.join(rg_data['security']['key_vaults'])}\n"
+                        if rg_data['security']['managed_identities']:
+                            content += f"- **Managed Identities ({len(rg_data['security']['managed_identities'])}):** {', '.join(rg_data['security']['managed_identities'])}\n"
+                        content += "\n"
+
+                    content += "---\n\n"
+
+        content += "\n[← Back to Index](../README.md)\n"
+
+        filepath = self.resources_dir / "hierarchy.md"
+        with open(filepath, 'w') as f:
+            f.write(content)
+        print(f"   ✓ Hierarchy report: {filepath}")
+
     def generate_security_report(self, audit_data):
         """Generate security resources report"""
         content = """# Security Resources
@@ -920,6 +1175,7 @@ def generate_all_reports(audit_data, output_dir):
 
     reports = [
         ("Index", generator.generate_index),
+        ("Hierarchy", generator.generate_hierarchy_report),
         ("Subscriptions", generator.generate_subscription_report),
         ("Networking", generator.generate_networking_report),
         ("Compute", generator.generate_compute_report),
