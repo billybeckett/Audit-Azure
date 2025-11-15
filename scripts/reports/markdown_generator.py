@@ -918,13 +918,38 @@ def generate_all_reports(audit_data, output_dir):
     """Generate all markdown reports"""
     generator = MarkdownGenerator(output_dir)
 
-    generator.generate_index(audit_data)
-    generator.generate_subscription_report(audit_data)
-    generator.generate_networking_report(audit_data)
-    generator.generate_compute_report(audit_data)
-    generator.generate_storage_report(audit_data)
-    generator.generate_database_report(audit_data)
-    generator.generate_dns_report(audit_data)
-    generator.generate_security_report(audit_data)
+    reports = [
+        ("Index", generator.generate_index),
+        ("Subscriptions", generator.generate_subscription_report),
+        ("Networking", generator.generate_networking_report),
+        ("Compute", generator.generate_compute_report),
+        ("Storage", generator.generate_storage_report),
+        ("Database", generator.generate_database_report),
+        ("DNS", generator.generate_dns_report),
+        ("Security", generator.generate_security_report),
+    ]
 
-    print(f"\n✓ All reports generated successfully in: {output_dir}")
+    success_count = 0
+    failed_reports = []
+
+    for report_name, report_func in reports:
+        try:
+            report_func(audit_data)
+            success_count += 1
+        except Exception as e:
+            failed_reports.append((report_name, str(e)))
+            print(f"   ⚠ Warning: {report_name} report failed: {e}")
+            # Continue generating other reports
+
+    print(f"\n✓ Generated {success_count}/{len(reports)} reports in: {output_dir}")
+
+    if failed_reports:
+        print(f"\n⚠ The following reports failed to generate:")
+        for name, error in failed_reports:
+            print(f"   - {name}: {error}")
+        print("\nTip: This usually happens when Azure CLI commands fail due to:")
+        print("   - Network/SSL errors")
+        print("   - Authentication issues")
+        print("   - Insufficient permissions")
+        print("   - Empty subscriptions")
+        print("\nCheck the log file for detailed error information.")
