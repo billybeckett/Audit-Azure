@@ -55,8 +55,12 @@ class AzureAuditor:
         print(f"✓ Raw data saved to: {output_file}")
         return output_file
 
-    def run_discovery(self):
-        """Run complete Azure discovery process"""
+    def run_discovery(self, non_interactive=False):
+        """Run complete Azure discovery process
+
+        Args:
+            non_interactive: If True, audits all subscriptions without prompting
+        """
         logger = get_logger()
         logger.log_section("Azure Resource Discovery and Audit")
 
@@ -77,16 +81,66 @@ class AzureAuditor:
         # Discover subscriptions
         print("📋 Discovering Azure Subscriptions...")
         try:
-            self.audit_data["subscriptions"] = discover_subscriptions()
-            print(f"   Found {len(self.audit_data['subscriptions'])} subscription(s)")
+            all_subscriptions = discover_subscriptions()
+            print(f"   Found {len(all_subscriptions)} subscription(s)")
         except Exception as e:
             print(f"   ⚠ Error: {e}")
-            self.audit_data["subscriptions"] = []
+            all_subscriptions = []
 
-        if not self.audit_data["subscriptions"]:
+        if not all_subscriptions:
             print("\n❌ No subscriptions found or authentication failed.")
             print("   Please run 'az login' first.")
             return False
+
+        # Interactive subscription selection (unless non-interactive mode)
+        if non_interactive:
+            # Non-interactive mode: audit all subscriptions
+            self.audit_data["subscriptions"] = all_subscriptions
+            print(f"\n✓ Non-interactive mode: Auditing ALL {len(all_subscriptions)} subscription(s)")
+        else:
+            # Interactive mode: show menu
+            print("\n" + "=" * 80)
+            print("SUBSCRIPTION SELECTION")
+            print("=" * 80)
+
+            # Display subscriptions
+            print("\nAvailable Subscriptions:\n")
+            for idx, sub in enumerate(all_subscriptions, 1):
+                state_icon = "✓" if sub.get("state") == "Enabled" else "✗"
+                print(f"  {idx}. {state_icon} {sub.get('name')}")
+                print(f"     ID: {sub.get('id')}")
+                print(f"     State: {sub.get('state')}")
+                print()
+
+            # Ask user for selection
+            print("Options:")
+            print("  0 - Audit ALL subscriptions")
+            print("  1-{} - Audit a specific subscription".format(len(all_subscriptions)))
+            print()
+
+            while True:
+                try:
+                    choice = input("Select option (0 for all, or subscription number): ").strip()
+                    choice_num = int(choice)
+
+                    if choice_num == 0:
+                        # Audit all subscriptions
+                        self.audit_data["subscriptions"] = all_subscriptions
+                        print(f"\n✓ Selected: ALL {len(all_subscriptions)} subscription(s)")
+                        break
+                    elif 1 <= choice_num <= len(all_subscriptions):
+                        # Audit single subscription
+                        selected_sub = all_subscriptions[choice_num - 1]
+                        self.audit_data["subscriptions"] = [selected_sub]
+                        print(f"\n✓ Selected: {selected_sub.get('name')}")
+                        break
+                    else:
+                        print(f"❌ Invalid choice. Please enter 0-{len(all_subscriptions)}")
+                except ValueError:
+                    print("❌ Invalid input. Please enter a number.")
+                except (KeyboardInterrupt, EOFError):
+                    print("\n\n❌ Audit cancelled by user.")
+                    return False
 
         # Process each subscription
         for sub in self.audit_data["subscriptions"]:
@@ -224,6 +278,11 @@ def main():
         default='docs',
         help='Directory for output documentation (default: docs/)'
     )
+    parser.add_argument(
+        '--non-interactive',
+        action='store_true',
+        help='Run in non-interactive mode (audits all subscriptions without prompting)'
+    )
 
     args = parser.parse_args()
 
@@ -232,7 +291,7 @@ def main():
 
     # Run audit
     auditor = AzureAuditor(output_dir=args.output_dir)
-    success = auditor.run_discovery()
+    success = auditor.run_discovery(non_interactive=args.non_interactive)
     sys.exit(0 if success else 1)
 
 
