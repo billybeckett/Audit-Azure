@@ -76,7 +76,7 @@ Virtual Machines, VM Scale Sets, App Services, Functions, Containers, AKS cluste
 Storage Accounts, Managed Disks, Blob Containers, File Shares, and more.
 
 ### 🗄️ [Database Resources](resources/databases.md)
-SQL Databases, MySQL, PostgreSQL, CosmosDB, Redis Cache, and more.
+SQL Databases, CosmosDB, Redis Cache, and more.
 
 ### 🔍 [DNS Resources](resources/dns.md)
 DNS Zones, Private DNS Zones, DNS Records, and domain configurations.
@@ -590,7 +590,9 @@ This document details all storage resources including Storage Accounts, Managed 
 
 ## Overview
 
-This document details all database resources including SQL, MySQL, PostgreSQL, CosmosDB, and Redis.
+This document details all database resources including SQL, CosmosDB, and Redis.
+
+**Note:** MySQL, PostgreSQL, and MariaDB discovery have been removed as the Azure CLI commands (`az mysql`, `az postgres`, `az mariadb`) are deprecated.
 
 """
         database_data = audit_data.get("databases", {})
@@ -608,11 +610,8 @@ This document details all database resources including SQL, MySQL, PostgreSQL, C
 |--------------|-------|
 | SQL Servers | {summary.get('sql_servers', 0)} |
 | SQL Databases | {summary.get('sql_databases', 0)} |
-| MySQL Servers | {summary.get('mysql', 0)} |
-| PostgreSQL Servers | {summary.get('postgresql', 0)} |
 | CosmosDB Accounts | {summary.get('cosmosdb', 0)} |
 | Redis Caches | {summary.get('redis', 0)} |
-| MariaDB Servers | {summary.get('mariadb', 0)} |
 
 """
 
@@ -653,30 +652,6 @@ This document details all database resources including SQL, MySQL, PostgreSQL, C
                     else:
                         content += "*No firewall rules configured.*\n"
                     content += "\n"
-
-            # MySQL Servers
-            mysql_servers = db_data.get("mysql_servers", [])
-            if mysql_servers:
-                content += "## MySQL Servers\n\n"
-                content += "| Name | Version | SKU | Storage (MB) | SSL | Location |\n"
-                content += "|------|---------|-----|--------------|-----|----------|\n"
-                for server in mysql_servers:
-                    content += (f"| {server.get('name')} | {server.get('version')} | "
-                              f"{server.get('sku', {}).get('name')} | {server.get('storage_mb')} | "
-                              f"{server.get('ssl_enforcement')} | {server.get('location')} |\n")
-                content += "\n"
-
-            # PostgreSQL Servers
-            postgresql_servers = db_data.get("postgresql_servers", [])
-            if postgresql_servers:
-                content += "## PostgreSQL Servers\n\n"
-                content += "| Name | Version | SKU | Storage (MB) | SSL | Location |\n"
-                content += "|------|---------|-----|--------------|-----|----------|\n"
-                for server in postgresql_servers:
-                    content += (f"| {server.get('name')} | {server.get('version')} | "
-                              f"{server.get('sku', {}).get('name')} | {server.get('storage_mb')} | "
-                              f"{server.get('ssl_enforcement')} | {server.get('location')} |\n")
-                content += "\n"
 
             # CosmosDB
             cosmosdb_accounts = db_data.get("cosmosdb_accounts", [])
@@ -854,7 +829,7 @@ This document shows the complete hierarchy of your Azure infrastructure, organiz
                         'networking': {'vnets': [], 'subnets': [], 'nsgs': [], 'public_ips': [], 'load_balancers': [], 'firewalls': []},
                         'compute': {'vms': [], 'vmss': [], 'app_services': [], 'functions': [], 'aks': []},
                         'storage': {'storage_accounts': [], 'disks': []},
-                        'databases': {'sql_servers': [], 'mysql': [], 'postgresql': [], 'cosmosdb': [], 'redis': []},
+                        'databases': {'sql_servers': [], 'cosmosdb': [], 'redis': []},
                         'dns': {'dns_zones': [], 'private_dns_zones': []},
                         'security': {'key_vaults': [], 'managed_identities': []}
                     }
@@ -923,14 +898,6 @@ This document shows the complete hierarchy of your Azure infrastructure, organiz
                     rg = sql.get('resource_group')
                     if rg in rg_resources:
                         rg_resources[rg]['databases']['sql_servers'].append(sql.get('name'))
-                for mysql in db_data.get('mysql_servers', []):
-                    rg = mysql.get('resource_group')
-                    if rg in rg_resources:
-                        rg_resources[rg]['databases']['mysql'].append(mysql.get('name'))
-                for pg in db_data.get('postgresql_servers', []):
-                    rg = pg.get('resource_group')
-                    if rg in rg_resources:
-                        rg_resources[rg]['databases']['postgresql'].append(pg.get('name'))
                 for cosmos in db_data.get('cosmosdb_accounts', []):
                     rg = cosmos.get('resource_group')
                     if rg in rg_resources:
@@ -1022,10 +989,6 @@ This document shows the complete hierarchy of your Azure infrastructure, organiz
                         content += "#### 🗄️ Databases\n\n"
                         if rg_data['databases']['sql_servers']:
                             content += f"- **SQL Servers ({len(rg_data['databases']['sql_servers'])}):** {', '.join(rg_data['databases']['sql_servers'])}\n"
-                        if rg_data['databases']['mysql']:
-                            content += f"- **MySQL Servers ({len(rg_data['databases']['mysql'])}):** {', '.join(rg_data['databases']['mysql'])}\n"
-                        if rg_data['databases']['postgresql']:
-                            content += f"- **PostgreSQL Servers ({len(rg_data['databases']['postgresql'])}):** {', '.join(rg_data['databases']['postgresql'])}\n"
                         if rg_data['databases']['cosmosdb']:
                             content += f"- **CosmosDB Accounts ({len(rg_data['databases']['cosmosdb'])}):** {', '.join(rg_data['databases']['cosmosdb'])}\n"
                         if rg_data['databases']['redis']:
@@ -1086,7 +1049,6 @@ This document details all security-related resources including Key Vaults, Manag
 | Role Assignments | {summary.get('role_assignments', 0)} |
 | Security Alerts | {summary.get('security_alerts', 0)} |
 | Security Recommendations | {summary.get('security_recommendations', 0)} |
-| Security Contacts | {summary.get('security_contacts', 0)} |
 
 """
 

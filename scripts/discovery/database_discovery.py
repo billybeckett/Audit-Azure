@@ -25,11 +25,8 @@ def discover_databases(subscription_id):
     database_data = {
         "sql_servers": [],
         "sql_databases": [],
-        "mysql_servers": [],
-        "postgresql_servers": [],
         "cosmosdb_accounts": [],
         "redis_caches": [],
-        "mariadb_servers": [],
         "summary": {}
     }
 
@@ -99,113 +96,9 @@ def discover_databases(subscription_id):
 
         database_data["sql_servers"].append(server_info)
 
-    # MySQL Servers
-    mysql_servers = run_az_command(
-        f"az mysql server list --subscription {subscription_id} --output json"
-    )
-    for server in mysql_servers:
-        server_info = {
-            "name": server.get("name"),
-            "id": server.get("id"),
-            "location": server.get("location"),
-            "resource_group": server.get("resourceGroup"),
-            "fully_qualified_domain_name": server.get("fullyQualifiedDomainName"),
-            "version": server.get("version"),
-            "administrator_login": server.get("administratorLogin"),
-            "user_visible_state": server.get("userVisibleState"),
-            "sku": {
-                "name": server.get("sku", {}).get("name"),
-                "tier": server.get("sku", {}).get("tier"),
-                "capacity": server.get("sku", {}).get("capacity"),
-                "family": server.get("sku", {}).get("family")
-            },
-            "storage_mb": server.get("storageProfile", {}).get("storageMb"),
-            "backup_retention_days": server.get("storageProfile", {}).get("backupRetentionDays"),
-            "geo_redundant_backup": server.get("storageProfile", {}).get("geoRedundantBackup"),
-            "ssl_enforcement": server.get("sslEnforcement"),
-            "minimal_tls_version": server.get("minimalTlsVersion"),
-            "public_network_access": server.get("publicNetworkAccess"),
-            "tags": server.get("tags", {})
-        }
-
-        # Get databases
-        databases = run_az_command(
-            f"az mysql db list --subscription {subscription_id} "
-            f"--resource-group {server.get('resourceGroup')} "
-            f"--server-name {server.get('name')} --output json"
-        )
-        server_info["databases"] = [db.get("name") for db in databases]
-
-        # Get firewall rules
-        firewall_rules = run_az_command(
-            f"az mysql server firewall-rule list --subscription {subscription_id} "
-            f"--resource-group {server.get('resourceGroup')} "
-            f"--server-name {server.get('name')} --output json"
-        )
-        server_info["firewall_rules"] = [
-            {
-                "name": rule.get("name"),
-                "start_ip": rule.get("startIpAddress"),
-                "end_ip": rule.get("endIpAddress")
-            }
-            for rule in firewall_rules
-        ]
-
-        database_data["mysql_servers"].append(server_info)
-
-    # PostgreSQL Servers
-    postgresql_servers = run_az_command(
-        f"az postgres server list --subscription {subscription_id} --output json"
-    )
-    for server in postgresql_servers:
-        server_info = {
-            "name": server.get("name"),
-            "id": server.get("id"),
-            "location": server.get("location"),
-            "resource_group": server.get("resourceGroup"),
-            "fully_qualified_domain_name": server.get("fullyQualifiedDomainName"),
-            "version": server.get("version"),
-            "administrator_login": server.get("administratorLogin"),
-            "user_visible_state": server.get("userVisibleState"),
-            "sku": {
-                "name": server.get("sku", {}).get("name"),
-                "tier": server.get("sku", {}).get("tier"),
-                "capacity": server.get("sku", {}).get("capacity"),
-                "family": server.get("sku", {}).get("family")
-            },
-            "storage_mb": server.get("storageProfile", {}).get("storageMb"),
-            "backup_retention_days": server.get("storageProfile", {}).get("backupRetentionDays"),
-            "geo_redundant_backup": server.get("storageProfile", {}).get("geoRedundantBackup"),
-            "ssl_enforcement": server.get("sslEnforcement"),
-            "minimal_tls_version": server.get("minimalTlsVersion"),
-            "public_network_access": server.get("publicNetworkAccess"),
-            "tags": server.get("tags", {})
-        }
-
-        # Get databases
-        databases = run_az_command(
-            f"az postgres db list --subscription {subscription_id} "
-            f"--resource-group {server.get('resourceGroup')} "
-            f"--server-name {server.get('name')} --output json"
-        )
-        server_info["databases"] = [db.get("name") for db in databases]
-
-        # Get firewall rules
-        firewall_rules = run_az_command(
-            f"az postgres server firewall-rule list --subscription {subscription_id} "
-            f"--resource-group {server.get('resourceGroup')} "
-            f"--server-name {server.get('name')} --output json"
-        )
-        server_info["firewall_rules"] = [
-            {
-                "name": rule.get("name"),
-                "start_ip": rule.get("startIpAddress"),
-                "end_ip": rule.get("endIpAddress")
-            }
-            for rule in firewall_rules
-        ]
-
-        database_data["postgresql_servers"].append(server_info)
+    # NOTE: MySQL, PostgreSQL, and MariaDB commands have been removed
+    # The old 'az mysql', 'az postgres', and 'az mariadb' commands are deprecated
+    # Use 'az mysql flexible-server' and 'az postgres flexible-server' instead if needed
 
     # CosmosDB Accounts
     cosmosdb_accounts = run_az_command(
@@ -282,44 +175,12 @@ def discover_databases(subscription_id):
         }
         database_data["redis_caches"].append(redis_info)
 
-    # MariaDB Servers
-    mariadb_servers = run_az_command(
-        f"az mariadb server list --subscription {subscription_id} --output json"
-    )
-    for server in mariadb_servers:
-        server_info = {
-            "name": server.get("name"),
-            "id": server.get("id"),
-            "location": server.get("location"),
-            "resource_group": server.get("resourceGroup"),
-            "fully_qualified_domain_name": server.get("fullyQualifiedDomainName"),
-            "version": server.get("version"),
-            "administrator_login": server.get("administratorLogin"),
-            "user_visible_state": server.get("userVisibleState"),
-            "sku": {
-                "name": server.get("sku", {}).get("name"),
-                "tier": server.get("sku", {}).get("tier"),
-                "capacity": server.get("sku", {}).get("capacity"),
-                "family": server.get("sku", {}).get("family")
-            },
-            "storage_mb": server.get("storageProfile", {}).get("storageMb"),
-            "backup_retention_days": server.get("storageProfile", {}).get("backupRetentionDays"),
-            "geo_redundant_backup": server.get("storageProfile", {}).get("geoRedundantBackup"),
-            "ssl_enforcement": server.get("sslEnforcement"),
-            "public_network_access": server.get("publicNetworkAccess"),
-            "tags": server.get("tags", {})
-        }
-        database_data["mariadb_servers"].append(server_info)
-
     # Calculate summary
     database_data["summary"] = {
         "sql_servers": len(database_data["sql_servers"]),
         "sql_databases": len(database_data["sql_databases"]),
-        "mysql": len(database_data["mysql_servers"]),
-        "postgresql": len(database_data["postgresql_servers"]),
         "cosmosdb": len(database_data["cosmosdb_accounts"]),
-        "redis": len(database_data["redis_caches"]),
-        "mariadb": len(database_data["mariadb_servers"])
+        "redis": len(database_data["redis_caches"])
     }
 
     return database_data

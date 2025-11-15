@@ -28,7 +28,6 @@ def discover_security(subscription_id):
         "role_assignments": [],
         "security_center_alerts": [],
         "security_center_recommendations": [],
-        "security_contacts": [],
         "summary": {}
     }
 
@@ -184,22 +183,8 @@ def discover_security(subscription_id):
     except:
         security_data["security_center_recommendations"] = []
 
-    # Security Contacts
-    try:
-        contacts = run_az_command(
-            f"az security contact list --subscription {subscription_id} --output json"
-        )
-        for contact in contacts:
-            contact_info = {
-                "name": contact.get("name"),
-                "email": contact.get("properties", {}).get("email"),
-                "phone": contact.get("properties", {}).get("phone"),
-                "alert_notifications": contact.get("properties", {}).get("alertNotifications"),
-                "alerts_to_admins": contact.get("properties", {}).get("alertsToAdmins")
-            }
-            security_data["security_contacts"].append(contact_info)
-    except:
-        security_data["security_contacts"] = []
+    # NOTE: Security contacts command has been removed
+    # The 'az security contact list' command is deprecated
 
     # Calculate summary
     security_data["summary"] = {
@@ -207,8 +192,7 @@ def discover_security(subscription_id):
         "managed_identities": len(security_data["managed_identities"]),
         "role_assignments": len(security_data["role_assignments"]),
         "security_alerts": len(security_data["security_center_alerts"]),
-        "security_recommendations": len(security_data["security_center_recommendations"]),
-        "security_contacts": len(security_data["security_contacts"])
+        "security_recommendations": len(security_data["security_center_recommendations"])
     }
 
     return security_data
