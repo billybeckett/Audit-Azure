@@ -792,33 +792,36 @@ This document details all DNS resources including DNS Zones and Private DNS Zone
 
 ## Overview
 
-This document shows the complete hierarchy of your Azure infrastructure, organized by Account → Subscriptions → Resource Groups → Resources.
+This document shows the complete hierarchy of your Azure infrastructure in a tree format.
 
+```
 """
         # Get subscriptions
         subscriptions = audit_data.get("subscriptions", [])
 
         if not subscriptions:
-            content += "*No subscriptions found or authentication failed.*\n"
+            content += "No subscriptions found or authentication failed.\n"
         else:
+            # Get tenant info from first subscription
+            tenant_id = subscriptions[0].get('tenant_id', 'Unknown') if subscriptions else 'Unknown'
+            content += f"🏢 Azure Tenant ({tenant_id[:8]}...)\n"
+
             # Build resource index by subscription and resource group
-            for sub in subscriptions:
+            for sub_idx, sub in enumerate(subscriptions):
                 sub_id = sub.get("id", "unknown")
                 sub_name = sub.get("name", "Unknown")
+                is_last_sub = sub_idx == len(subscriptions) - 1
+                sub_prefix = "└── " if is_last_sub else "├── "
+                sub_continuation = "    " if is_last_sub else "│   "
 
-                content += f"\n## 📦 Subscription: {sub_name}\n\n"
-                content += f"**Subscription ID:** `{sub_id}`\n\n"
-                content += f"**State:** {sub.get('state', 'Unknown')} | "
-                content += f"**Tenant ID:** `{sub.get('tenant_id', 'N/A')}`\n\n"
+                content += f"{sub_prefix}📦 {sub_name}\n"
 
                 # Get resource groups
                 resource_groups = sub.get('resource_groups', [])
 
                 if not resource_groups:
-                    content += "*No resource groups found in this subscription.*\n\n"
+                    content += f"{sub_continuation}└── (no resource groups)\n"
                     continue
-
-                content += f"**Resource Groups:** {len(resource_groups)}\n\n"
 
                 # Create resource index by resource group
                 rg_resources = {}
@@ -930,92 +933,103 @@ This document shows the complete hierarchy of your Azure infrastructure, organiz
                         rg_resources[rg]['security']['managed_identities'].append(mi.get('name'))
 
                 # Generate hierarchy tree for each resource group
-                for rg_name, rg_data in rg_resources.items():
-                    content += f"### 📁 Resource Group: `{rg_name}` ({rg_data['location']})\n\n"
+                rg_names = list(rg_resources.keys())
+                for rg_idx, rg_name in enumerate(rg_names):
+                    rg_data = rg_resources[rg_name]
+                    is_last_rg = rg_idx == len(rg_names) - 1
+                    rg_prefix = f"{sub_continuation}└── " if is_last_rg else f"{sub_continuation}├── "
+                    rg_continuation = f"{sub_continuation}    " if is_last_rg else f"{sub_continuation}│   "
 
-                    # Count total resources
-                    total_resources = 0
-                    for category in rg_data.values():
-                        if isinstance(category, dict):
-                            for resources in category.values():
-                                if isinstance(resources, list):
-                                    total_resources += len(resources)
+                    content += f"{rg_prefix}📁 {rg_name} ({rg_data['location']})\n"
 
-                    if total_resources == 0:
-                        content += "*No resources found in this resource group.*\n\n"
-                        continue
+                    # Build list of categories with resources
+                    categories = []
 
                     # Networking
-                    if any(len(v) > 0 for v in rg_data['networking'].values()):
-                        content += "#### 🌐 Networking\n\n"
-                        if rg_data['networking']['vnets']:
-                            content += f"- **Virtual Networks ({len(rg_data['networking']['vnets'])}):** {', '.join(rg_data['networking']['vnets'])}\n"
-                        if rg_data['networking']['nsgs']:
-                            content += f"- **Network Security Groups ({len(rg_data['networking']['nsgs'])}):** {', '.join(rg_data['networking']['nsgs'])}\n"
-                        if rg_data['networking']['public_ips']:
-                            content += f"- **Public IPs ({len(rg_data['networking']['public_ips'])}):** {', '.join(rg_data['networking']['public_ips'])}\n"
-                        if rg_data['networking']['load_balancers']:
-                            content += f"- **Load Balancers ({len(rg_data['networking']['load_balancers'])}):** {', '.join(rg_data['networking']['load_balancers'])}\n"
-                        if rg_data['networking']['firewalls']:
-                            content += f"- **Firewalls ({len(rg_data['networking']['firewalls'])}):** {', '.join(rg_data['networking']['firewalls'])}\n"
-                        content += "\n"
+                    net_resources = []
+                    if rg_data['networking']['vnets']:
+                        net_resources.extend([('VNet', name) for name in rg_data['networking']['vnets']])
+                    if rg_data['networking']['nsgs']:
+                        net_resources.extend([('NSG', name) for name in rg_data['networking']['nsgs']])
+                    if rg_data['networking']['public_ips']:
+                        net_resources.extend([('PublicIP', name) for name in rg_data['networking']['public_ips']])
+                    if rg_data['networking']['load_balancers']:
+                        net_resources.extend([('LB', name) for name in rg_data['networking']['load_balancers']])
+                    if rg_data['networking']['firewalls']:
+                        net_resources.extend([('Firewall', name) for name in rg_data['networking']['firewalls']])
+                    if net_resources:
+                        categories.append(('🌐 Networking', net_resources))
 
                     # Compute
-                    if any(len(v) > 0 for v in rg_data['compute'].values()):
-                        content += "#### 💻 Compute\n\n"
-                        if rg_data['compute']['vms']:
-                            content += f"- **Virtual Machines ({len(rg_data['compute']['vms'])}):** {', '.join(rg_data['compute']['vms'])}\n"
-                        if rg_data['compute']['vmss']:
-                            content += f"- **VM Scale Sets ({len(rg_data['compute']['vmss'])}):** {', '.join(rg_data['compute']['vmss'])}\n"
-                        if rg_data['compute']['app_services']:
-                            content += f"- **App Services ({len(rg_data['compute']['app_services'])}):** {', '.join(rg_data['compute']['app_services'])}\n"
-                        if rg_data['compute']['functions']:
-                            content += f"- **Function Apps ({len(rg_data['compute']['functions'])}):** {', '.join(rg_data['compute']['functions'])}\n"
-                        if rg_data['compute']['aks']:
-                            content += f"- **AKS Clusters ({len(rg_data['compute']['aks'])}):** {', '.join(rg_data['compute']['aks'])}\n"
-                        content += "\n"
+                    compute_resources = []
+                    if rg_data['compute']['vms']:
+                        compute_resources.extend([('VM', name) for name in rg_data['compute']['vms']])
+                    if rg_data['compute']['vmss']:
+                        compute_resources.extend([('VMSS', name) for name in rg_data['compute']['vmss']])
+                    if rg_data['compute']['app_services']:
+                        compute_resources.extend([('AppService', name) for name in rg_data['compute']['app_services']])
+                    if rg_data['compute']['functions']:
+                        compute_resources.extend([('Function', name) for name in rg_data['compute']['functions']])
+                    if rg_data['compute']['aks']:
+                        compute_resources.extend([('AKS', name) for name in rg_data['compute']['aks']])
+                    if compute_resources:
+                        categories.append(('💻 Compute', compute_resources))
 
                     # Storage
-                    if any(len(v) > 0 for v in rg_data['storage'].values()):
-                        content += "#### 💾 Storage\n\n"
-                        if rg_data['storage']['storage_accounts']:
-                            content += f"- **Storage Accounts ({len(rg_data['storage']['storage_accounts'])}):** {', '.join(rg_data['storage']['storage_accounts'])}\n"
-                        if rg_data['storage']['disks']:
-                            content += f"- **Managed Disks ({len(rg_data['storage']['disks'])}):** {', '.join(rg_data['storage']['disks'])}\n"
-                        content += "\n"
+                    storage_resources = []
+                    if rg_data['storage']['storage_accounts']:
+                        storage_resources.extend([('Storage', name) for name in rg_data['storage']['storage_accounts']])
+                    if rg_data['storage']['disks']:
+                        storage_resources.extend([('Disk', name) for name in rg_data['storage']['disks']])
+                    if storage_resources:
+                        categories.append(('💾 Storage', storage_resources))
 
                     # Databases
-                    if any(len(v) > 0 for v in rg_data['databases'].values()):
-                        content += "#### 🗄️ Databases\n\n"
-                        if rg_data['databases']['sql_servers']:
-                            content += f"- **SQL Servers ({len(rg_data['databases']['sql_servers'])}):** {', '.join(rg_data['databases']['sql_servers'])}\n"
-                        if rg_data['databases']['cosmosdb']:
-                            content += f"- **CosmosDB Accounts ({len(rg_data['databases']['cosmosdb'])}):** {', '.join(rg_data['databases']['cosmosdb'])}\n"
-                        if rg_data['databases']['redis']:
-                            content += f"- **Redis Caches ({len(rg_data['databases']['redis'])}):** {', '.join(rg_data['databases']['redis'])}\n"
-                        content += "\n"
+                    db_resources = []
+                    if rg_data['databases']['sql_servers']:
+                        db_resources.extend([('SQL', name) for name in rg_data['databases']['sql_servers']])
+                    if rg_data['databases']['cosmosdb']:
+                        db_resources.extend([('CosmosDB', name) for name in rg_data['databases']['cosmosdb']])
+                    if rg_data['databases']['redis']:
+                        db_resources.extend([('Redis', name) for name in rg_data['databases']['redis']])
+                    if db_resources:
+                        categories.append(('🗄️ Databases', db_resources))
 
                     # DNS
-                    if any(len(v) > 0 for v in rg_data['dns'].values()):
-                        content += "#### 🔍 DNS\n\n"
-                        if rg_data['dns']['dns_zones']:
-                            content += f"- **DNS Zones ({len(rg_data['dns']['dns_zones'])}):** {', '.join(rg_data['dns']['dns_zones'])}\n"
-                        if rg_data['dns']['private_dns_zones']:
-                            content += f"- **Private DNS Zones ({len(rg_data['dns']['private_dns_zones'])}):** {', '.join(rg_data['dns']['private_dns_zones'])}\n"
-                        content += "\n"
+                    dns_resources = []
+                    if rg_data['dns']['dns_zones']:
+                        dns_resources.extend([('DNS', name) for name in rg_data['dns']['dns_zones']])
+                    if rg_data['dns']['private_dns_zones']:
+                        dns_resources.extend([('PrivateDNS', name) for name in rg_data['dns']['private_dns_zones']])
+                    if dns_resources:
+                        categories.append(('🔍 DNS', dns_resources))
 
                     # Security
-                    if any(len(v) > 0 for v in rg_data['security'].values()):
-                        content += "#### 🔒 Security\n\n"
-                        if rg_data['security']['key_vaults']:
-                            content += f"- **Key Vaults ({len(rg_data['security']['key_vaults'])}):** {', '.join(rg_data['security']['key_vaults'])}\n"
-                        if rg_data['security']['managed_identities']:
-                            content += f"- **Managed Identities ({len(rg_data['security']['managed_identities'])}):** {', '.join(rg_data['security']['managed_identities'])}\n"
-                        content += "\n"
+                    sec_resources = []
+                    if rg_data['security']['key_vaults']:
+                        sec_resources.extend([('KeyVault', name) for name in rg_data['security']['key_vaults']])
+                    if rg_data['security']['managed_identities']:
+                        sec_resources.extend([('Identity', name) for name in rg_data['security']['managed_identities']])
+                    if sec_resources:
+                        categories.append(('🔒 Security', sec_resources))
 
-                    content += "---\n\n"
+                    # Render categories and resources
+                    if not categories:
+                        content += f"{rg_continuation}└── (empty)\n"
+                    else:
+                        for cat_idx, (cat_name, resources) in enumerate(categories):
+                            is_last_cat = cat_idx == len(categories) - 1
+                            cat_prefix = f"{rg_continuation}└── " if is_last_cat else f"{rg_continuation}├── "
+                            cat_continuation = f"{rg_continuation}    " if is_last_cat else f"{rg_continuation}│   "
 
-        content += "\n[← Back to Index](../README.md)\n"
+                            content += f"{cat_prefix}{cat_name}\n"
+
+                            for res_idx, (res_type, res_name) in enumerate(resources):
+                                is_last_res = res_idx == len(resources) - 1
+                                res_prefix = f"{cat_continuation}└── " if is_last_res else f"{cat_continuation}├── "
+                                content += f"{res_prefix}{res_name}\n"
+
+        content += "```\n\n[← Back to Index](../README.md)\n"
 
         filepath = self.resources_dir / "hierarchy.md"
         with open(filepath, 'w') as f:
