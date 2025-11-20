@@ -814,7 +814,7 @@ This document shows the complete hierarchy of your Azure infrastructure in a tre
                 sub_prefix = "└── " if is_last_sub else "├── "
                 sub_continuation = "    " if is_last_sub else "│   "
 
-                content += f"{sub_prefix}📦 {sub_name}\n"
+                content += f"{sub_prefix}📦 {sub_name} ({sub_id[:13]}...)\n"
 
                 # Get resource groups
                 resource_groups = sub.get('resource_groups', [])
@@ -837,29 +837,61 @@ This document shows the complete hierarchy of your Azure infrastructure in a tre
                         'security': {'key_vaults': [], 'managed_identities': []}
                     }
 
-                # Populate resources by resource group
-                # Networking
+                # Populate resources by resource group - storing full objects for networking
                 networking_data = audit_data.get('networking', {}).get(sub_id, {})
+
+                # Store full VNet objects (we need them to show subnets, peerings, etc.)
                 for vnet in networking_data.get('vnets', []):
                     rg = vnet.get('resource_group')
                     if rg in rg_resources:
-                        rg_resources[rg]['networking']['vnets'].append(vnet.get('name'))
+                        rg_resources[rg]['networking']['vnets'].append(vnet)
+
+                # Store NSG objects with their names indexed for lookup
+                nsg_lookup = {}
                 for nsg in networking_data.get('nsgs', []):
                     rg = nsg.get('resource_group')
+                    nsg_lookup[nsg.get('id')] = nsg.get('name')
                     if rg in rg_resources:
-                        rg_resources[rg]['networking']['nsgs'].append(nsg.get('name'))
+                        rg_resources[rg]['networking']['nsgs'].append(nsg)
+
+                # Store route table names indexed for lookup
+                route_table_lookup = {}
+                for rt in networking_data.get('route_tables', []):
+                    route_table_lookup[rt.get('id')] = rt.get('name')
+
+                # Store VNet Gateways
+                for vgw in networking_data.get('vnet_gateways', []):
+                    rg = vgw.get('resource_group')
+                    if rg in rg_resources:
+                        if 'vnet_gateways' not in rg_resources[rg]['networking']:
+                            rg_resources[rg]['networking']['vnet_gateways'] = []
+                        rg_resources[rg]['networking']['vnet_gateways'].append(vgw)
+
+                # Store other networking resources
                 for pip in networking_data.get('public_ips', []):
                     rg = pip.get('resource_group')
                     if rg in rg_resources:
-                        rg_resources[rg]['networking']['public_ips'].append(pip.get('name'))
+                        rg_resources[rg]['networking']['public_ips'].append(pip)
                 for lb in networking_data.get('load_balancers', []):
                     rg = lb.get('resource_group')
                     if rg in rg_resources:
-                        rg_resources[rg]['networking']['load_balancers'].append(lb.get('name'))
+                        rg_resources[rg]['networking']['load_balancers'].append(lb)
                 for fw in networking_data.get('firewalls', []):
                     rg = fw.get('resource_group')
                     if rg in rg_resources:
-                        rg_resources[rg]['networking']['firewalls'].append(fw.get('name'))
+                        rg_resources[rg]['networking']['firewalls'].append(fw)
+                for appgw in networking_data.get('application_gateways', []):
+                    rg = appgw.get('resource_group')
+                    if rg in rg_resources:
+                        if 'app_gateways' not in rg_resources[rg]['networking']:
+                            rg_resources[rg]['networking']['app_gateways'] = []
+                        rg_resources[rg]['networking']['app_gateways'].append(appgw)
+                for nic in networking_data.get('network_interfaces', []):
+                    rg = nic.get('resource_group')
+                    if rg in rg_resources:
+                        if 'nics' not in rg_resources[rg]['networking']:
+                            rg_resources[rg]['networking']['nics'] = []
+                        rg_resources[rg]['networking']['nics'].append(nic)
 
                 # Compute
                 compute_data = audit_data.get('compute', {}).get(sub_id, {})
@@ -945,20 +977,91 @@ This document shows the complete hierarchy of your Azure infrastructure in a tre
                     # Build list of categories with resources
                     categories = []
 
-                    # Networking
-                    net_resources = []
+                    # Networking - build hierarchical structure
+                    net_items = []
+
+                    # VNets with their children (subnets, peerings, etc.)
                     if rg_data['networking']['vnets']:
-                        net_resources.extend([('VNet', name) for name in rg_data['networking']['vnets']])
+                        for vnet in rg_data['networking']['vnets']:
+                            vnet_item = ('vnet', vnet.get('name'), [])
+
+                            # Add subnets as children
+                            for subnet in vnet.get('subnets', []):
+                                subnet_details = []
+                                subnet_name = subnet.get('name')
+                                subnet_prefix = subnet.get('address_prefix', '')
+
+                                # Add NSG reference if exists
+                                nsg_id = subnet.get('nsg')
+                                if nsg_id and nsg_id in nsg_lookup:
+                                    subnet_details.append(('nsg-ref', f"NSG: {nsg_lookup[nsg_id]}", []))
+
+                                # Add Route Table reference if exists
+                                rt_id = subnet.get('route_table')
+                                if rt_id and rt_id in route_table_lookup:
+                                    subnet_details.append(('rt-ref', f"RouteTable: {route_table_lookup[rt_id]}", []))
+
+                                vnet_item[2].append(('subnet', f"{subnet_name} ({subnet_prefix})", subnet_details))
+
+                            # Add peerings as children
+                            for peering in vnet.get('peerings', []):
+                                peering_name = peering.get('name')
+                                peering_state = peering.get('peering_state', 'Unknown')
+                                vnet_item[2].append(('peering', f"Peering: {peering_name} ({peering_state})", []))
+
+                            net_items.append(vnet_item)
+
+                    # VNet Gateways
+                    if rg_data['networking'].get('vnet_gateways'):
+                        for vgw in rg_data['networking']['vnet_gateways']:
+                            vgw_name = vgw.get('name')
+                            vgw_type = vgw.get('gateway_type', 'Unknown')
+                            vgw_sku = vgw.get('sku', 'Unknown')
+                            net_items.append(('vnet-gateway', f"{vgw_name} ({vgw_type}, {vgw_sku})", []))
+
+                    # NSGs (standalone, not referenced by subnets)
                     if rg_data['networking']['nsgs']:
-                        net_resources.extend([('NSG', name) for name in rg_data['networking']['nsgs']])
+                        for nsg in rg_data['networking']['nsgs']:
+                            nsg_name = nsg.get('name')
+                            rule_count = len(nsg.get('security_rules', []))
+                            net_items.append(('nsg', f"{nsg_name} ({rule_count} rules)", []))
+
+                    # Public IPs
                     if rg_data['networking']['public_ips']:
-                        net_resources.extend([('PublicIP', name) for name in rg_data['networking']['public_ips']])
+                        for pip in rg_data['networking']['public_ips']:
+                            pip_name = pip.get('name')
+                            pip_addr = pip.get('ip_address', 'Not assigned')
+                            net_items.append(('public-ip', f"{pip_name} ({pip_addr})", []))
+
+                    # Load Balancers
                     if rg_data['networking']['load_balancers']:
-                        net_resources.extend([('LB', name) for name in rg_data['networking']['load_balancers']])
+                        for lb in rg_data['networking']['load_balancers']:
+                            lb_name = lb.get('name')
+                            lb_sku = lb.get('sku', 'Unknown')
+                            net_items.append(('lb', f"{lb_name} ({lb_sku})", []))
+
+                    # Application Gateways
+                    if rg_data['networking'].get('app_gateways'):
+                        for appgw in rg_data['networking']['app_gateways']:
+                            appgw_name = appgw.get('name')
+                            appgw_tier = appgw.get('tier', 'Unknown')
+                            net_items.append(('app-gateway', f"{appgw_name} ({appgw_tier})", []))
+
+                    # Firewalls
                     if rg_data['networking']['firewalls']:
-                        net_resources.extend([('Firewall', name) for name in rg_data['networking']['firewalls']])
-                    if net_resources:
-                        categories.append(('🌐 Networking', net_resources))
+                        for fw in rg_data['networking']['firewalls']:
+                            fw_name = fw.get('name')
+                            fw_tier = fw.get('tier', 'Unknown')
+                            net_items.append(('firewall', f"{fw_name} ({fw_tier})", []))
+
+                    # Network Interfaces
+                    if rg_data['networking'].get('nics'):
+                        for nic in rg_data['networking']['nics']:
+                            nic_name = nic.get('name')
+                            net_items.append(('nic', f"{nic_name}", []))
+
+                    if net_items:
+                        categories.append(('🌐 Networking', net_items))
 
                     # Compute
                     compute_resources = []
@@ -1013,6 +1116,26 @@ This document shows the complete hierarchy of your Azure infrastructure in a tre
                     if sec_resources:
                         categories.append(('🔒 Security', sec_resources))
 
+                    # Helper function to render tree items recursively
+                    def render_tree_items(items, prefix, continuation):
+                        for item_idx, item in enumerate(items):
+                            is_last_item = item_idx == len(items) - 1
+                            item_prefix = f"{prefix}└── " if is_last_item else f"{prefix}├── "
+                            item_continuation = f"{prefix}    " if is_last_item else f"{prefix}│   "
+
+                            # Item can be (type, name) or (type, name, children)
+                            if len(item) == 2:
+                                item_type, item_name = item
+                                content_lines.append(f"{item_prefix}{item_name}\n")
+                            elif len(item) == 3:
+                                item_type, item_name, children = item
+                                content_lines.append(f"{item_prefix}{item_name}\n")
+                                # Render children recursively
+                                if children:
+                                    render_tree_items(children, item_continuation, item_continuation)
+                            else:
+                                content_lines.append(f"{item_prefix}{item}\n")
+
                     # Render categories and resources
                     if not categories:
                         content += f"{rg_continuation}└── (empty)\n"
@@ -1024,10 +1147,10 @@ This document shows the complete hierarchy of your Azure infrastructure in a tre
 
                             content += f"{cat_prefix}{cat_name}\n"
 
-                            for res_idx, (res_type, res_name) in enumerate(resources):
-                                is_last_res = res_idx == len(resources) - 1
-                                res_prefix = f"{cat_continuation}└── " if is_last_res else f"{cat_continuation}├── "
-                                content += f"{res_prefix}{res_name}\n"
+                            # Use helper function to render items (may have children)
+                            content_lines = []
+                            render_tree_items(resources, cat_continuation, cat_continuation)
+                            content += ''.join(content_lines)
 
         content += "```\n\n[← Back to Index](../README.md)\n"
 
