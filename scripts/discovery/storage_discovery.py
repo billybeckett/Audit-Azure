@@ -142,60 +142,73 @@ def discover_storage(subscription_id):
 
         storage_data["storage_accounts"].append(sa_info)
 
-    # Managed Disks
-    disks = run_az_command(
-        f"az disk list --subscription {subscription_id} --output json"
+    # Managed Disks (requires iterating through resource groups)
+    resource_groups = run_az_command(
+        f"az group list --subscription {subscription_id} --output json"
     )
-    for disk in disks:
-        disk_info = {
-            "name": disk.get("name"),
-            "id": disk.get("id"),
-            "location": disk.get("location"),
-            "resource_group": disk.get("resourceGroup"),
-            "sku": {
-                "name": disk.get("sku", {}).get("name"),
-                "tier": disk.get("sku", {}).get("tier")
-            },
-            "disk_size_gb": disk.get("diskSizeGb"),
-            "disk_size_bytes": disk.get("diskSizeBytes"),
-            "os_type": disk.get("osType"),
-            "disk_state": disk.get("diskState"),
-            "time_created": disk.get("timeCreated"),
-            "provisioning_state": disk.get("provisioningState"),
-            "disk_iops_read_write": disk.get("diskIOPSReadWrite"),
-            "disk_mbps_read_write": disk.get("diskMBpsReadWrite"),
-            "encryption_type": disk.get("encryption", {}).get("type"),
-            "network_access_policy": disk.get("networkAccessPolicy"),
-            "public_network_access": disk.get("publicNetworkAccess"),
-            "attached_to": disk.get("managedBy"),
-            "zones": disk.get("zones", []),
-            "tags": disk.get("tags", {})
-        }
-        storage_data["managed_disks"].append(disk_info)
+    for rg in resource_groups:
+        rg_name = rg.get("name")
+        try:
+            disks = run_az_command(
+                f"az disk list --resource-group {rg_name} --subscription {subscription_id} --output json"
+            )
+        except Exception:
+            disks = []
+        for disk in disks:
+            disk_info = {
+                "name": disk.get("name"),
+                "id": disk.get("id"),
+                "location": disk.get("location"),
+                "resource_group": disk.get("resourceGroup"),
+                "sku": {
+                    "name": disk.get("sku", {}).get("name"),
+                    "tier": disk.get("sku", {}).get("tier")
+                },
+                "disk_size_gb": disk.get("diskSizeGb"),
+                "disk_size_bytes": disk.get("diskSizeBytes"),
+                "os_type": disk.get("osType"),
+                "disk_state": disk.get("diskState"),
+                "time_created": disk.get("timeCreated"),
+                "provisioning_state": disk.get("provisioningState"),
+                "disk_iops_read_write": disk.get("diskIOPSReadWrite"),
+                "disk_mbps_read_write": disk.get("diskMBpsReadWrite"),
+                "encryption_type": disk.get("encryption", {}).get("type"),
+                "network_access_policy": disk.get("networkAccessPolicy"),
+                "public_network_access": disk.get("publicNetworkAccess"),
+                "attached_to": disk.get("managedBy"),
+                "zones": disk.get("zones", []),
+                "tags": disk.get("tags", {})
+            }
+            storage_data["managed_disks"].append(disk_info)
 
-    # Disk Snapshots
-    snapshots = run_az_command(
-        f"az snapshot list --subscription {subscription_id} --output json"
-    )
-    for snapshot in snapshots:
-        snapshot_info = {
-            "name": snapshot.get("name"),
-            "id": snapshot.get("id"),
-            "location": snapshot.get("location"),
-            "resource_group": snapshot.get("resourceGroup"),
-            "sku": {
-                "name": snapshot.get("sku", {}).get("name"),
-                "tier": snapshot.get("sku", {}).get("tier")
-            },
-            "disk_size_gb": snapshot.get("diskSizeGb"),
-            "os_type": snapshot.get("osType"),
-            "time_created": snapshot.get("timeCreated"),
-            "provisioning_state": snapshot.get("provisioningState"),
-            "source_disk": snapshot.get("creationData", {}).get("sourceResourceId"),
-            "incremental": snapshot.get("incremental"),
-            "tags": snapshot.get("tags", {})
-        }
-        storage_data["disk_snapshots"].append(snapshot_info)
+    # Disk Snapshots (requires iterating through resource groups)
+    for rg in resource_groups:
+        rg_name = rg.get("name")
+        try:
+            snapshots = run_az_command(
+                f"az snapshot list --resource-group {rg_name} --subscription {subscription_id} --output json"
+            )
+        except Exception:
+            snapshots = []
+        for snapshot in snapshots:
+            snapshot_info = {
+                "name": snapshot.get("name"),
+                "id": snapshot.get("id"),
+                "location": snapshot.get("location"),
+                "resource_group": snapshot.get("resourceGroup"),
+                "sku": {
+                    "name": snapshot.get("sku", {}).get("name"),
+                    "tier": snapshot.get("sku", {}).get("tier")
+                },
+                "disk_size_gb": snapshot.get("diskSizeGb"),
+                "os_type": snapshot.get("osType"),
+                "time_created": snapshot.get("timeCreated"),
+                "provisioning_state": snapshot.get("provisioningState"),
+                "source_disk": snapshot.get("creationData", {}).get("sourceResourceId"),
+                "incremental": snapshot.get("incremental"),
+                "tags": snapshot.get("tags", {})
+            }
+            storage_data["disk_snapshots"].append(snapshot_info)
 
     # Calculate summary
     storage_data["summary"] = {
