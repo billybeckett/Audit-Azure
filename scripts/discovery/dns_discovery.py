@@ -28,6 +28,12 @@ def discover_dns(subscription_id):
         "summary": {}
     }
 
+    # Get all resource groups for this subscription (needed for private DNS zones)
+    resource_groups = run_az_command(
+        f"az group list --subscription {subscription_id} --output json"
+    )
+    rg_names = [rg.get("name") for rg in resource_groups if rg.get("name")]
+
     # Public DNS Zones
     dns_zones = run_az_command(
         f"az network dns zone list --subscription {subscription_id} --output json"
@@ -129,110 +135,113 @@ def discover_dns(subscription_id):
 
         dns_data["dns_zones"].append(zone_info)
 
-    # Private DNS Zones
-    private_dns_zones = run_az_command(
-        f"az network private-dns zone list --subscription {subscription_id} --output json"
-    )
-    for zone in private_dns_zones:
-        zone_info = {
-            "name": zone.get("name"),
-            "id": zone.get("id"),
-            "location": zone.get("location"),
-            "resource_group": zone.get("resourceGroup"),
-            "number_of_record_sets": zone.get("numberOfRecordSets"),
-            "max_number_of_record_sets": zone.get("maxNumberOfRecordSets"),
-            "number_of_virtual_network_links": zone.get("numberOfVirtualNetworkLinks"),
-            "max_number_of_virtual_network_links": zone.get("maxNumberOfVirtualNetworkLinks"),
-            "provisioning_state": zone.get("provisioningState"),
-            "tags": zone.get("tags", {})
-        }
-
-        # Get virtual network links
-        vnet_links = run_az_command(
-            f"az network private-dns link vnet list --subscription {subscription_id} "
-            f"--resource-group {zone.get('resourceGroup')} "
-            f"--zone-name {zone.get('name')} --output json"
+    # Private DNS Zones (requires iterating through resource groups)
+    for rg_name in rg_names:
+        private_dns_zones = run_az_command(
+            f"az network private-dns zone list --resource-group {rg_name} --subscription {subscription_id} --output json"
         )
-        zone_info["virtual_network_links"] = [
-            {
-                "name": link.get("name"),
-                "virtual_network": link.get("virtualNetwork", {}).get("id"),
-                "registration_enabled": link.get("registrationEnabled"),
-                "provisioning_state": link.get("provisioningState")
-            }
-            for link in vnet_links
-        ]
-
-        # Get private DNS records
-        record_sets = run_az_command(
-            f"az network private-dns record-set list --subscription {subscription_id} "
-            f"--resource-group {zone.get('resourceGroup')} "
-            f"--zone-name {zone.get('name')} --output json"
-        )
-
-        zone_info["record_sets"] = []
-        for record_set in record_sets:
-            record_info = {
-                "name": record_set.get("name"),
-                "type": record_set.get("type"),
-                "ttl": record_set.get("ttl"),
-                "fqdn": record_set.get("fqdn")
+        for zone in private_dns_zones:
+            zone_info = {
+                "name": zone.get("name"),
+                "id": zone.get("id"),
+                "location": zone.get("location"),
+                "resource_group": zone.get("resourceGroup"),
+                "number_of_record_sets": zone.get("numberOfRecordSets"),
+                "max_number_of_record_sets": zone.get("maxNumberOfRecordSets"),
+                "number_of_virtual_network_links": zone.get("numberOfVirtualNetworkLinks"),
+                "max_number_of_virtual_network_links": zone.get("maxNumberOfVirtualNetworkLinks"),
+                "provisioning_state": zone.get("provisioningState"),
+                "tags": zone.get("tags", {})
             }
 
-            # Extract record data
-            record_type = record_set.get("type", "").split("/")[-1] if record_set.get("type") else ""
-
-            if record_type == "A":
-                record_info["a_records"] = [
-                    r.get("ipv4Address") for r in record_set.get("aRecords", [])
-                ]
-            elif record_type == "AAAA":
-                record_info["aaaa_records"] = [
-                    r.get("ipv6Address") for r in record_set.get("aaaaRecords", [])
-                ]
-            elif record_type == "CNAME":
-                record_info["cname_record"] = record_set.get("cnameRecord", {}).get("cname")
-            elif record_type == "MX":
-                record_info["mx_records"] = [
-                    {
-                        "preference": r.get("preference"),
-                        "exchange": r.get("exchange")
-                    }
-                    for r in record_set.get("mxRecords", [])
-                ]
-            elif record_type == "PTR":
-                record_info["ptr_records"] = [
-                    r.get("ptrdname") for r in record_set.get("ptrRecords", [])
-                ]
-            elif record_type == "SOA":
-                soa = record_set.get("soaRecord", {})
-                record_info["soa_record"] = {
-                    "host": soa.get("host"),
-                    "email": soa.get("email"),
-                    "serial": soa.get("serialNumber"),
-                    "refresh": soa.get("refreshTime"),
-                    "retry": soa.get("retryTime"),
-                    "expire": soa.get("expireTime"),
-                    "minimum": soa.get("minimumTtl")
+            # Get virtual network links
+            vnet_links = run_az_command(
+                f"az network private-dns link vnet list "
+                f"--resource-group {rg_name} "
+                f"--zone-name {zone.get('name')} "
+                f"--subscription {subscription_id} --output json"
+            )
+            zone_info["virtual_network_links"] = [
+                {
+                    "name": link.get("name"),
+                    "virtual_network": link.get("virtualNetwork", {}).get("id"),
+                    "registration_enabled": link.get("registrationEnabled"),
+                    "provisioning_state": link.get("provisioningState")
                 }
-            elif record_type == "SRV":
-                record_info["srv_records"] = [
-                    {
-                        "priority": r.get("priority"),
-                        "weight": r.get("weight"),
-                        "port": r.get("port"),
-                        "target": r.get("target")
+                for link in vnet_links
+            ]
+
+            # Get private DNS records
+            record_sets = run_az_command(
+                f"az network private-dns record-set list "
+                f"--resource-group {rg_name} "
+                f"--zone-name {zone.get('name')} "
+                f"--subscription {subscription_id} --output json"
+            )
+
+            zone_info["record_sets"] = []
+            for record_set in record_sets:
+                record_info = {
+                    "name": record_set.get("name"),
+                    "type": record_set.get("type"),
+                    "ttl": record_set.get("ttl"),
+                    "fqdn": record_set.get("fqdn")
+                }
+
+                # Extract record data
+                record_type = record_set.get("type", "").split("/")[-1] if record_set.get("type") else ""
+
+                if record_type == "A":
+                    record_info["a_records"] = [
+                        r.get("ipv4Address") for r in record_set.get("aRecords", [])
+                    ]
+                elif record_type == "AAAA":
+                    record_info["aaaa_records"] = [
+                        r.get("ipv6Address") for r in record_set.get("aaaaRecords", [])
+                    ]
+                elif record_type == "CNAME":
+                    record_info["cname_record"] = record_set.get("cnameRecord", {}).get("cname")
+                elif record_type == "MX":
+                    record_info["mx_records"] = [
+                        {
+                            "preference": r.get("preference"),
+                            "exchange": r.get("exchange")
+                        }
+                        for r in record_set.get("mxRecords", [])
+                    ]
+                elif record_type == "PTR":
+                    record_info["ptr_records"] = [
+                        r.get("ptrdname") for r in record_set.get("ptrRecords", [])
+                    ]
+                elif record_type == "SOA":
+                    soa = record_set.get("soaRecord", {})
+                    record_info["soa_record"] = {
+                        "host": soa.get("host"),
+                        "email": soa.get("email"),
+                        "serial": soa.get("serialNumber"),
+                        "refresh": soa.get("refreshTime"),
+                        "retry": soa.get("retryTime"),
+                        "expire": soa.get("expireTime"),
+                        "minimum": soa.get("minimumTtl")
                     }
-                    for r in record_set.get("srvRecords", [])
-                ]
-            elif record_type == "TXT":
-                record_info["txt_records"] = [
-                    r.get("value") for r in record_set.get("txtRecords", [])
-                ]
+                elif record_type == "SRV":
+                    record_info["srv_records"] = [
+                        {
+                            "priority": r.get("priority"),
+                            "weight": r.get("weight"),
+                            "port": r.get("port"),
+                            "target": r.get("target")
+                        }
+                        for r in record_set.get("srvRecords", [])
+                    ]
+                elif record_type == "TXT":
+                    record_info["txt_records"] = [
+                        r.get("value") for r in record_set.get("txtRecords", [])
+                    ]
 
-            zone_info["record_sets"].append(record_info)
+                zone_info["record_sets"].append(record_info)
 
-        dns_data["private_dns_zones"].append(zone_info)
+            dns_data["private_dns_zones"].append(zone_info)
 
     # Calculate summary
     dns_data["summary"] = {
