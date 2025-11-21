@@ -143,13 +143,14 @@ def get_logger():
     return _logger
 
 
-def run_az_command(command, timeout=120):
+def run_az_command(command, timeout=120, max_retries=3):
     """
-    Execute Azure CLI command with comprehensive logging
+    Execute Azure CLI command with comprehensive logging and retry logic
 
     Args:
         command: Azure CLI command to execute
         timeout: Command timeout in seconds
+        max_retries: Maximum number of retry attempts (default: 3)
 
     Returns:
         JSON parsed output from command
@@ -157,51 +158,107 @@ def run_az_command(command, timeout=120):
     logger = get_logger()
     logger.log_command(command)
 
-    start_time = time.time()
+    for attempt in range(1, max_retries + 1):
+        start_time = time.time()
 
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
-
-        duration = time.time() - start_time
-
-        if result.returncode != 0:
-            logger.log_error(f"Command failed with return code {result.returncode}", command)
-            logger.file_logger.error(f"[STDERR] {result.stderr}")
-            if logger.verbose:
-                print(f"    ✗ STDERR: {result.stderr[:200]}")
-            return []
-
-        # Parse JSON response
         try:
-            data = json.loads(result.stdout) if result.stdout else []
-            logger.log_result(result=data, duration=duration)
-            logger.log_json_response(data)
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
 
-            # Log full JSON to file if verbose
-            if logger.verbose:
-                logger.file_logger.debug(f"[Full Response] {json.dumps(data, indent=2)[:500]}...")
+            duration = time.time() - start_time
 
-            return data
+            if result.returncode != 0:
+                error_msg = f"Command failed with return code {result.returncode} (Attempt {attempt}/{max_retries})"
+                logger.log_error(error_msg, command)
+                logger.file_logger.error(f"[STDERR] {result.stderr}")
+                if logger.verbose:
+                    print(f"    ✗ STDERR: {result.stderr[:200]}")
 
-        except json.JSONDecodeError as e:
-            logger.log_error(f"Failed to parse JSON: {e}", command)
-            logger.file_logger.debug(f"[Raw Output] {result.stdout[:500]}")
-            return []
+                # Retry logic
+                if attempt < max_retries:
+                    retry_msg = f"Command failed. Retrying in 1 second... (Attempt {attempt}/{max_retries})"
+                    logger.file_logger.warning(retry_msg)
+                    print(f"    ⚠ {retry_msg}")
+                    time.sleep(1)
+                    continue
+                else:
+                    final_msg = f"Command failed after {max_retries} attempts. Moving on."
+                    logger.file_logger.error(final_msg)
+                    print(f"    ✗ {final_msg}")
+                    return []
 
-    except subprocess.TimeoutExpired:
-        duration = time.time() - start_time
-        logger.log_error(f"Command timed out after {timeout}s", command)
-        return []
+            # Parse JSON response
+            try:
+                data = json.loads(result.stdout) if result.stdout else []
+                logger.log_result(result=data, duration=duration)
+                logger.log_json_response(data)
 
-    except Exception as e:
-        duration = time.time() - start_time
-        logger.log_error(f"Command execution failed: {e}", command)
-        import traceback
-        logger.file_logger.error(f"[Traceback] {traceback.format_exc()}")
-        return []
+                # Log full JSON to file if verbose
+                if logger.verbose:
+                    logger.file_logger.debug(f"[Full Response] {json.dumps(data, indent=2)[:500]}...")
+
+                return data
+
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse JSON (Attempt {attempt}/{max_retries}): {e}"
+                logger.log_error(error_msg, command)
+                logger.file_logger.debug(f"[Raw Output] {result.stdout[:500]}")
+
+                # Retry logic for JSON parse errors
+                if attempt < max_retries:
+                    retry_msg = f"JSON parsing failed. Retrying in 1 second... (Attempt {attempt}/{max_retries})"
+                    logger.file_logger.warning(retry_msg)
+                    print(f"    ⚠ {retry_msg}")
+                    time.sleep(1)
+                    continue
+                else:
+                    final_msg = f"JSON parsing failed after {max_retries} attempts. Moving on."
+                    logger.file_logger.error(final_msg)
+                    print(f"    ✗ {final_msg}")
+                    return []
+
+        except subprocess.TimeoutExpired:
+            duration = time.time() - start_time
+            error_msg = f"Command timed out after {timeout}s (Attempt {attempt}/{max_retries})"
+            logger.log_error(error_msg, command)
+
+            # Retry logic for timeouts
+            if attempt < max_retries:
+                retry_msg = f"Command timed out. Retrying in 1 second... (Attempt {attempt}/{max_retries})"
+                logger.file_logger.warning(retry_msg)
+                print(f"    ⚠ {retry_msg}")
+                time.sleep(1)
+                continue
+            else:
+                final_msg = f"Command timed out after {max_retries} attempts. Moving on."
+                logger.file_logger.error(final_msg)
+                print(f"    ✗ {final_msg}")
+                return []
+
+        except Exception as e:
+            duration = time.time() - start_time
+            error_msg = f"Command execution failed (Attempt {attempt}/{max_retries}): {e}"
+            logger.log_error(error_msg, command)
+            import traceback
+            logger.file_logger.error(f"[Traceback] {traceback.format_exc()}")
+
+            # Retry logic for general exceptions
+            if attempt < max_retries:
+                retry_msg = f"Command execution failed. Retrying in 1 second... (Attempt {attempt}/{max_retries})"
+                logger.file_logger.warning(retry_msg)
+                print(f"    ⚠ {retry_msg}")
+                time.sleep(1)
+                continue
+            else:
+                final_msg = f"Command execution failed after {max_retries} attempts. Moving on."
+                logger.file_logger.error(final_msg)
+                print(f"    ✗ {final_msg}")
+                return []
+
+    # This should never be reached, but just in case
+    return []
