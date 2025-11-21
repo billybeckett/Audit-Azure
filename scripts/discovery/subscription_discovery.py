@@ -24,21 +24,6 @@ def discover_subscriptions():
     # Get all subscriptions
     subs = run_az_command("az account list --output json")
 
-    # Get available locations (global, not per-subscription)
-    available_locations = []
-    try:
-        locations = run_az_command("az account list-locations --output json")
-        available_locations = [
-            {
-                "name": loc.get("name"),
-                "display_name": loc.get("displayName"),
-                "region": loc.get("metadata", {}).get("regionType")
-            }
-            for loc in locations
-        ]
-    except Exception as e:
-        pass  # Locations will remain empty
-
     for sub in subs:
         # Get detailed subscription info
         sub_info = {
@@ -81,9 +66,6 @@ def discover_subscriptions():
             ]
         except Exception as e:
             sub_info["registered_providers"] = []
-
-        # Add available locations (fetched once above)
-        sub_info["available_locations"] = available_locations
 
         subscriptions.append(sub_info)
 
